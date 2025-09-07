@@ -1,86 +1,160 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-    
 
 export default function StudentDashboard() {
-    const [enrolledCourses, setEnrolledCourses] = useState([]);
-    const [allCourses, setAllCourses] = useState([]);
-    const token = localStorage.getItem("token");
+  const [courses, setCourses] = useState([]);
+  const [enrolledCourses, setEnrolledCourses] = useState([]);
 
-    // Fetch enrolled courses
-    useEffect(() => {
-        if (!token) return;
-        fetch("http://localhost:5000/api/enrollments/my", {
-            headers: { Authorization: `Bearer ${token}` },
-        })
-            .then((res) => res.json())
-            .then((data) => setEnrolledCourses(data))
-            .catch(console.error);
-    }, [token]);
-
-    // Fetch all courses
-    useEffect(() => {
-        fetch("http://localhost:5000/api/courses")
-            .then((res) => res.json())
-            .then((data) => setAllCourses(data))
-            .catch(console.error);
-    }, []);
-
-    const handleEnroll = async (courseId) => {
-        try {
-            const res = await fetch("http://localhost:5000/api/enrollments/enroll", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify({ courseId }),
-            });
-            const data = await res.json();
-            alert(JSON.stringify(data));
-            if (res.ok) setEnrolledCourses((prev) => [...prev, { course: data.enrollment.course }]);
-        } catch (err) {
-            console.error(err);
-            alert("Enrollment failed");
-        }
+  // ✅ Fetch all courses from backend
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const res = await fetch("http://localhost:5000/api/courses");
+        const data = await res.json();
+        if (res.ok) setCourses(data);
+        else console.error(data.error);
+      } catch (err) {
+        console.error(err);
+      }
     };
+    fetchCourses();
+  }, []);
 
-    return (
-        <div className="min-h-screen p-6 bg-gray-100">
-            <h1 className="text-3xl font-bold mb-4">Student Dashboard</h1>
+  const handleEnroll = async (course) => {
+    try {
+      // 1️⃣ Create order on backend
+      const res = await fetch("http://localhost:5000/api/payments/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: course.price }),
+      });
 
-            <section className="mb-6">
-                <h2 className="text-2xl font-semibold mb-2">My Courses</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {enrolledCourses.length === 0 && <p>No courses enrolled yet.</p>}
-                    {enrolledCourses.map((enrollment) => (
-                        <div key={enrollment._id || enrollment.course._id} className="p-4 bg-white rounded shadow">
-                            <h3 className="font-bold">{enrollment.course.title}</h3>
-                            <p>{enrollment.course.description}</p>
-                        </div>
-                    ))}
-                </div>
-            </section>
+      const order = await res.json();
 
-            <section>
-                <h2 className="text-2xl font-semibold mb-2">All Courses</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {allCourses.map((course) => (
-                        <div key={course._id} className="p-4 bg-white rounded shadow">
-                            <Link to={`/course/${course._id}`} className="font-bold text-blue-600 hover:underline">
-                                {course.title}
-                            </Link>
-                            <p>{course.description}</p>
-                            <button
-                                className="mt-2 px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-                                onClick={() => handleEnroll(course._id)}
-                            >
-                                Enroll
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            </section>
+      // 2️⃣ Open Razorpay checkout
+      const options = {
+        key: "rzp_test_RERUYJP23iHKih", // from Razorpay dashboard
+        amount: order.amount,
+        currency: order.currency,
+        name: "Course Payment",
+        description: `Payment for ${course.title}`,
+        order_id: order.id,
+        handler: async function (response) {
+          // 3️⃣ Verify signature with backend
+          const verifyRes = await fetch("http://localhost:5000/api/payments/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(response),
+          });
+
+          const data = await verifyRes.json();
+          if (data.success) {
+            alert(`Payment successful! Enrolled in ${course.title}`);
+            setEnrolledCourses((prev) => [...prev, course]);
+          } else {
+            alert("Payment verification failed");
+          }
+        },
+        theme: { color: "#3399cc" },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (err) {
+      console.error(err);
+      alert("Payment initiation failed");
+    }
+  };
+
+  return (
+    <div className="min-h-screen p-6 bg-gray-100">
+      <h1 className="text-3xl font-bold mb-4">Student Dashboard</h1>
+
+      {/* Available Courses */}
+      <section className="mb-6">
+        <h2 className="text-2xl font-semibold mb-2">Available Courses</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {courses.map((course) => (
+            <div key={course._id} className="p-4 bg-white rounded shadow">
+              <h3 className="font-bold">{course.title}</h3>
+              <p>{course.description}</p>
+              <p>Price: ₹{course.price}</p>
+              {course.videoFile && (
+                <video
+                  controls
+                  className="w-full max-w-lg my-2"
+                  src={`http://localhost:5000/uploads/${course.videoFile}`}
+                />
+              )}
+              {course.pdfFile && (
+                <a
+                  href={`http://localhost:5000/uploads/${course.pdfFile}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-blue-600 hover:underline my-1"
+                >
+                  View PDF
+                </a>
+              )}
+
+              {/* 🔹 Pay & Enroll Button */}
+              <button
+                onClick={() => handleEnroll(course)}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 mt-2 mr-2"
+              >
+                Pay & Enroll ₹{course.price}
+              </button>
+
+              {/* 🔹 View Course Button (navigates to CoursePage.jsx) */}
+              <Link
+                to={`/course/${course._id}`}
+                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 mt-2 inline-block"
+              >
+                View Course
+              </Link>
+            </div>
+          ))}
         </div>
-    );
+      </section>
+
+      {/* Enrolled Courses */}
+      <section>
+        <h2 className="text-2xl font-semibold mb-2">My Enrolled Courses</h2>
+        {enrolledCourses.length === 0 && <p>No courses enrolled yet.</p>}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {enrolledCourses.map((course) => (
+            <div key={course._id} className="p-4 bg-white rounded shadow">
+              <h3 className="font-bold">{course.title}</h3>
+              <p>{course.description}</p>
+              {course.videoFile && (
+                <video
+                  controls
+                  className="w-full max-w-lg my-2"
+                  src={`http://localhost:5000/uploads/${course.videoFile}`}
+                />
+              )}
+              {course.pdfFile && (
+                <a
+                  href={`http://localhost:5000/uploads/${course.pdfFile}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-blue-600 hover:underline my-1"
+                >
+                  View PDF
+                </a>
+              )}
+
+              {/* 🔹 Direct View Course for enrolled ones */}
+              <Link
+                to={`/course/${course._id}`}
+                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 mt-2 inline-block"
+              >
+                View Course
+              </Link>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
 }

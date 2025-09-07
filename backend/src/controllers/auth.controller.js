@@ -1,7 +1,9 @@
 // controllers/auth.controller.js
-const User = require('../models/User');
+const User = require('../models/User.js');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 
+// Generate JWT token
 const generateToken = (user) => {
   return jwt.sign(
     { userId: user._id, role: user.role },
@@ -11,7 +13,7 @@ const generateToken = (user) => {
 };
 
 // POST /api/auth/signup
-exports.signup = async (req, res, next) => {
+exports.signup = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
 
@@ -38,20 +40,24 @@ exports.signup = async (req, res, next) => {
       token
     });
   } catch (err) {
-    next(err);
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
   }
 };
 
 // POST /api/auth/login
-exports.login = async (req, res, next) => {
+exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
 
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ error: 'Invalid credentials' });
 
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) return res.status(400).json({ error: 'Invalid credentials' });
 
     const token = generateToken(user);
@@ -61,17 +67,19 @@ exports.login = async (req, res, next) => {
       token
     });
   } catch (err) {
-    next(err);
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
   }
 };
 
 // GET /api/auth/me
-exports.getMe = async (req, res, next) => {
+exports.getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select('-passwordHash');
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);
   } catch (err) {
-    next(err);
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
   }
 };

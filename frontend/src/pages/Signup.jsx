@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Signup() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("student");
+
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -14,8 +17,17 @@ export default function Signup() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password, role }),
       });
+
       const data = await res.json();
-      alert(JSON.stringify(data));
+
+      if (res.ok) {
+  alert("Signup successful!");
+  if (role === "student") navigate("/student");
+  else if (role === "tutor") navigate("/teacher"); // route stays /teacher
+}
+else {
+        alert(data.message || "Signup failed");
+      }
     } catch (err) {
       console.error(err);
       alert("Signup failed");
@@ -54,13 +66,14 @@ export default function Signup() {
           required
         />
         <select
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          className="w-full p-2 border mb-3 rounded"
-        >
-          <option value="student">Student</option>
-          <option value="tutor">Tutor</option>
-        </select>
+  value={role}
+  onChange={(e) => setRole(e.target.value)}
+  className="w-full p-2 border mb-3 rounded"
+>
+  <option value="student">Student</option>
+  <option value="tutor">Tutor</option>
+</select>
+
         <button
           type="submit"
           className="w-full py-2 bg-blue-500 text-white rounded hover:bg-blue-600"

@@ -1,5 +1,5 @@
-const Community = require('../models/Community');
-const Course = require('../models/Course');
+const Community = require('../models/Community.js');
+const Course = require('../models/Course.js');
 
 exports.getCommunity = async (req, res) => {
   const { courseId } = req.params;
@@ -25,21 +25,17 @@ exports.sendMessage = async (req, res) => {
   try {
     let community = await Community.findOne({ course: courseId });
     if (!community) {
-      // create community if it doesn't exist
       community = new Community({ course: courseId, members: [userId], messages: [] });
     }
 
-    // add user to members if not already
     if (!community.members.includes(userId)) community.members.push(userId);
 
     const newMessage = { sender: userId, content };
     community.messages.push(newMessage);
     await community.save();
 
-    // populate sender for frontend
     const populatedMessage = await community.populate('messages.sender', 'name');
-
-    res.json(populatedMessage.messages.slice(-1)[0]); // return the last message
+    res.json(populatedMessage.messages.slice(-1)[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });

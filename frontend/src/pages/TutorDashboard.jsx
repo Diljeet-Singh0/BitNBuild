@@ -1,107 +1,174 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function TutorDashboard() {
-  const [myCourses, setMyCourses] = useState([]);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [previewVideoUrl, setPreviewVideoUrl] = useState("");
-  const [price, setPrice] = useState(0);
-  const token = localStorage.getItem("token");
+  const [activeTab, setActiveTab] = useState("view"); // view | add | update
+  const [courses, setCourses] = useState([]);
+  const [newCourse, setNewCourse] = useState({
+    title: "",
+    description: "",
+    price: 0,
+    videoFile: null,
+    pdfFile: null,
+  });
 
-  // Fetch tutor's courses
+  // ✅ Fetch tutor's courses
   useEffect(() => {
-    if (!token) return;
-    fetch("http://localhost:5000/api/courses/my", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => res.json())
-      .then((data) => setMyCourses(data))
-      .catch(console.error);
-  }, [token]);
-
-  const handleCreateCourse = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch("http://localhost:5000/api/courses", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}` 
-        },
-        body: JSON.stringify({ title, description, previewVideoUrl, price }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        alert("Course created!");
-        setMyCourses((prev) => [...prev, data]);
-        setTitle(""); setDescription(""); setPreviewVideoUrl(""); setPrice(0);
-      } else {
-        alert(JSON.stringify(data));
+    const fetchCourses = async () => {
+      try {
+        const res = await fetch("http://localhost:5000/api/courses/my", {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
+        const data = await res.json();
+        if (res.ok) setCourses(data);
+        else console.error(data.error);
+      } catch (err) {
+        console.error(err);
       }
-    } catch (err) {
-      console.error(err);
-      alert("Failed to create course");
+    };
+    fetchCourses();
+  }, [activeTab]);
+
+  // ✅ Handle add course
+  const handleAddCourse = async (e) => {
+    e.preventDefault();
+    const formData = new FormData();
+    formData.append("title", newCourse.title);
+    formData.append("description", newCourse.description);
+    formData.append("price", newCourse.price);
+    if (newCourse.videoFile) formData.append("video", newCourse.videoFile);
+    if (newCourse.pdfFile) formData.append("pdf", newCourse.pdfFile);
+
+    const res = await fetch("http://localhost:5000/api/courses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: formData,
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      alert("Course added!");
+      setActiveTab("view"); // go back to view tab
+      setCourses((prev) => [...prev, data.course]); // update UI instantly
+    } else {
+      alert(data.error);
     }
   };
 
   return (
     <div className="min-h-screen p-6 bg-gray-100">
-      <h1 className="text-3xl font-bold mb-4">Tutor Dashboard</h1>
+      <h1 className="text-3xl font-bold mb-6">Tutor Dashboard</h1>
 
-      <section className="mb-6">
-        <h2 className="text-2xl font-semibold mb-2">Create New Course</h2>
-        <form onSubmit={handleCreateCourse} className="bg-white p-4 rounded shadow-md w-full md:w-1/2">
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6">
+        <button
+          className={`px-4 py-2 rounded ${
+            activeTab === "view" ? "bg-blue-600 text-white" : "bg-white border"
+          }`}
+          onClick={() => setActiveTab("view")}
+        >
+          View Courses
+        </button>
+        <button
+          className={`px-4 py-2 rounded ${
+            activeTab === "add" ? "bg-green-600 text-white" : "bg-white border"
+          }`}
+          onClick={() => setActiveTab("add")}
+        >
+          Add Course
+        </button>
+      </div>
+
+      {/* View Courses */}
+      {activeTab === "view" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {courses.length === 0 && <p>No courses added yet.</p>}
+          {courses.map((course) => (
+            <div key={course._id} className="p-4 bg-white rounded shadow">
+              <h3 className="font-bold text-lg">{course.title}</h3>
+              <p>{course.description}</p>
+              <p>Price: ₹{course.price}</p>
+              {course.videoFile && (
+                <video
+                  controls
+                  className="w-full max-w-lg my-2"
+                  src={`http://localhost:5000/uploads/${course.videoFile}`}
+                />
+              )}
+              {course.pdfFile && (
+                <a
+                  href={`http://localhost:5000/uploads/${course.pdfFile}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-blue-600 hover:underline my-1"
+                >
+                  View PDF
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add Course */}
+      {activeTab === "add" && (
+        <form
+          onSubmit={handleAddCourse}
+          className="bg-white p-6 rounded shadow-md w-full md:w-1/2"
+        >
+          <h2 className="text-2xl font-bold mb-4">Add New Course</h2>
           <input
             type="text"
             placeholder="Title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            value={newCourse.title}
+            onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })}
             className="w-full p-2 border mb-2 rounded"
             required
           />
-          <input
-            type="text"
+          <textarea
             placeholder="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full p-2 border mb-2 rounded"
-          />
-          <input
-            type="text"
-            placeholder="Preview Video URL"
-            value={previewVideoUrl}
-            onChange={(e) => setPreviewVideoUrl(e.target.value)}
+            value={newCourse.description}
+            onChange={(e) =>
+              setNewCourse({ ...newCourse, description: e.target.value })
+            }
             className="w-full p-2 border mb-2 rounded"
           />
           <input
             type="number"
             placeholder="Price"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
+            value={newCourse.price}
+            onChange={(e) =>
+              setNewCourse({ ...newCourse, price: e.target.value })
+            }
             className="w-full p-2 border mb-2 rounded"
+          />
+          <input
+            type="file"
+            accept="video/*"
+            onChange={(e) =>
+              setNewCourse({ ...newCourse, videoFile: e.target.files[0] })
+            }
+            className="w-full mb-2"
+          />
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={(e) =>
+              setNewCourse({ ...newCourse, pdfFile: e.target.files[0] })
+            }
+            className="w-full mb-2"
           />
           <button
             type="submit"
             className="w-full py-2 bg-green-500 text-white rounded hover:bg-green-600"
           >
-            Create Course
+            Add Course
           </button>
         </form>
-      </section>
-
-      <section>
-        <h2 className="text-2xl font-semibold mb-2">My Courses</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {myCourses.length === 0 && <p>No courses created yet.</p>}
-          {myCourses.map((course) => (
-            <div key={course._id} className="p-4 bg-white rounded shadow">
-              <h3 className="font-bold">{course.title}</h3>
-              <p>{course.description}</p>
-              <p>Price: {course.price}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      )}
     </div>
   );
 }

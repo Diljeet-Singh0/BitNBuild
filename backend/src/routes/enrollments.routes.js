@@ -14,11 +14,11 @@ router.post(
 );
 
 // Students can view own enrollments
-router.get(
-  '/my',
-  authMiddleware,
-  roleMiddleware(['student']),
-  enrollController.getStudentEnrollments
-);
+// router.get(
+//   '/my', 
+//   authMiddleware,
+//   roleMiddleware(['student']),
+//   enrollController.getStudentEnrollments
+// );
 
 module.exports = router;
